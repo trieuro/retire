@@ -21,18 +21,15 @@ export function projectRetirement(inputs: RetirementInputs): RetirementResult {
   const pensionAfterSurvivor = applySurvivorReduction(basePension, fers.survivorAnnuityElection);
 
   // Use SSA statement estimates to get benefit at claiming age
-  const workerSSMonthly = interpolateBenefit(
-    ssClaimingAge,
-    ss.monthlyBenefitAt62,
-    ss.monthlyBenefitAtFRA,
-    ss.monthlyBenefitAt70,
-    fra,
-  );
+  const b62 = ss.monthlyBenefitAt62 || 0;
+  const bFRA = ss.monthlyBenefitAtFRA || 0;
+  const b70 = ss.monthlyBenefitAt70 || 0;
+  const workerSSMonthly = interpolateBenefit(ssClaimingAge, b62, bFRA, b70, fra);
   const workerSSAnnual = workerSSMonthly * 12;
 
   // FERS supplement (from retirement to 62)
   const fersSupplementAnnual = fers.fersSupplementEligible
-    ? computeFERSSupplement(fers.yearsOfService, ss.monthlyBenefitAtFRA * 12)
+    ? computeFERSSupplement(fers.yearsOfService, bFRA * 12)
     : 0;
 
   // TSP projection during working years
@@ -108,7 +105,7 @@ export function projectRetirement(inputs: RetirementInputs): RetirementResult {
     const spousalAge = age - (ss.birthYear - spousal.spouseBirthYear);
     const ssSpousal =
       age >= ssClaimingAge && !spousal.isWorking
-        ? computeSpousalBenefit(ss.monthlyBenefitAtFRA, Math.max(62, spousalAge), spousalFRA) * 12
+        ? computeSpousalBenefit(bFRA, Math.max(62, spousalAge), spousalFRA) * 12
         : 0;
 
     // Other income

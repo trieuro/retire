@@ -1,10 +1,15 @@
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2; // bumped: migrated from AIME to SSA statement estimates
 const VERSION_KEY = "retireplan_version";
 
 function ensureVersion(): void {
   if (typeof window === "undefined") return;
   const version = localStorage.getItem(VERSION_KEY);
-  if (!version) {
+  if (!version || Number(version) < STORAGE_VERSION) {
+    // Clear old data on version bump to avoid stale/incompatible formats
+    const keys = Object.keys(localStorage).filter((k) => k.startsWith("retireplan_"));
+    for (const key of keys) {
+      localStorage.removeItem(key);
+    }
     localStorage.setItem(VERSION_KEY, String(STORAGE_VERSION));
   }
 }
