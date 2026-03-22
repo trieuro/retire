@@ -44,12 +44,14 @@ const defaultInputs: RetirementInputs = {
     catchUpEligible: false,
   },
   ss: {
-    birthYear: 1980,
-    aime: 5000,
+    birthYear: 1964,
+    monthlyBenefitAt62: 2906,
+    monthlyBenefitAtFRA: 4195,
+    monthlyBenefitAt70: 5224,
     lifeExpectancy: DEFAULT_LIFE_EXPECTANCY,
   },
   spousal: {
-    spouseBirthYear: 1982,
+    spouseBirthYear: 1966,
     isWorking: false,
   },
   ssClaimingAge: 67,
@@ -167,15 +169,23 @@ export default function CalculatorPage() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle className="text-base">Social Security</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Social Security (from SSA Statement)</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div>
                 <Label className="text-xs">Birth Year</Label>
                 <Input type="number" value={inputs.ss.birthYear} onChange={(e) => update("ss.birthYear", +e.target.value)} />
               </div>
               <div>
-                <Label className="text-xs">AIME (Avg Indexed Monthly Earnings)</Label>
-                <Input type="number" value={inputs.ss.aime} onChange={(e) => update("ss.aime", +e.target.value)} />
+                <Label className="text-xs">Monthly Benefit at 62</Label>
+                <Input type="number" value={inputs.ss.monthlyBenefitAt62} onChange={(e) => update("ss.monthlyBenefitAt62", +e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">Monthly Benefit at FRA (67)</Label>
+                <Input type="number" value={inputs.ss.monthlyBenefitAtFRA} onChange={(e) => update("ss.monthlyBenefitAtFRA", +e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">Monthly Benefit at 70</Label>
+                <Input type="number" value={inputs.ss.monthlyBenefitAt70} onChange={(e) => update("ss.monthlyBenefitAt70", +e.target.value)} />
               </div>
               <div>
                 <Label className="text-xs">SS Claiming Age</Label>

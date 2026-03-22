@@ -1,13 +1,15 @@
 export interface SSInputs {
   birthYear: number;
-  aime: number;
+  /** Use SSA statement estimates directly instead of AIME */
+  monthlyBenefitAt62: number;
+  monthlyBenefitAtFRA: number;
+  monthlyBenefitAt70: number;
   lifeExpectancy: number;
 }
 
 export interface SpousalInputs {
   spouseBirthYear: number;
   isWorking: boolean;
-  spouseAime?: number;
   spouseLifeExpectancy?: number;
 }
 

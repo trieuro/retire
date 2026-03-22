@@ -1,7 +1,7 @@
 import type { RetirementInputs, ProjectionYear, RetirementResult } from "../types/calculator";
 import { computeFERSAnnuity, applySurvivorReduction, computeFERSSupplement, applyFERSCOLA } from "./fers-pension";
 import { projectTSP, tspWithdrawalAmount } from "./tsp";
-import { computePIA, getFullRetirementAge, computeWorkerBenefit, computeSpousalBenefit } from "./social-security";
+import { getFullRetirementAge, interpolateBenefit, computeSpousalBenefit } from "./social-security";
 import { estimateFederalTax, computeSSTaxableAmount } from "./tax";
 import { inflateAmount } from "./compound";
 import { DEFAULT_CPI_RATE } from "../constants";
@@ -15,18 +15,24 @@ export function projectRetirement(inputs: RetirementInputs): RetirementResult {
   const projections: ProjectionYear[] = [];
 
   // Pre-compute values
-  const pia = computePIA(ss.aime);
   const fra = getFullRetirementAge(ss.birthYear);
   const spousalFRA = getFullRetirementAge(spousal.spouseBirthYear);
   const basePension = computeFERSAnnuity(fers.high3Salary, fers.yearsOfService, fers.retirementAge);
   const pensionAfterSurvivor = applySurvivorReduction(basePension, fers.survivorAnnuityElection);
-  const workerSSMonthly = computeWorkerBenefit(pia, ssClaimingAge, fra);
+
+  // Use SSA statement estimates to get benefit at claiming age
+  const workerSSMonthly = interpolateBenefit(
+    ssClaimingAge,
+    ss.monthlyBenefitAt62,
+    ss.monthlyBenefitAtFRA,
+    ss.monthlyBenefitAt70,
+    fra,
+  );
   const workerSSAnnual = workerSSMonthly * 12;
 
   // FERS supplement (from retirement to 62)
-  const ssFullBenefitMonthly = computeWorkerBenefit(pia, Math.ceil(fra), fra);
   const fersSupplementAnnual = fers.fersSupplementEligible
-    ? computeFERSSupplement(fers.yearsOfService, ssFullBenefitMonthly * 12)
+    ? computeFERSSupplement(fers.yearsOfService, ss.monthlyBenefitAtFRA * 12)
     : 0;
 
   // TSP projection during working years
@@ -102,7 +108,7 @@ export function projectRetirement(inputs: RetirementInputs): RetirementResult {
     const spousalAge = age - (ss.birthYear - spousal.spouseBirthYear);
     const ssSpousal =
       age >= ssClaimingAge && !spousal.isWorking
-        ? computeSpousalBenefit(pia, Math.max(62, spousalAge), spousalFRA) * 12
+        ? computeSpousalBenefit(ss.monthlyBenefitAtFRA, Math.max(62, spousalAge), spousalFRA) * 12
         : 0;
 
     // Other income
@@ -117,7 +123,6 @@ export function projectRetirement(inputs: RetirementInputs): RetirementResult {
 
     let tspWithdrawal = 0;
     if (incomeWithoutTSP < expenseAmount && tspBalance > 0) {
-      // Withdraw from TSP to cover gap
       tspWithdrawal = Math.min(expenseAmount - incomeWithoutTSP, tspBalance);
     }
 

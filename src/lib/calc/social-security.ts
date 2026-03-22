@@ -1,11 +1,8 @@
 import {
-  SS_BEND_POINTS,
-  SS_BEND_RATES,
   SS_FRA_TABLE,
+  SS_SPOUSAL_MAX_PERCENT,
   SS_EARLY_REDUCTION_FIRST_36_PER_MONTH,
   SS_EARLY_REDUCTION_AFTER_36_PER_MONTH,
-  SS_DELAYED_CREDIT_PER_YEAR,
-  SS_SPOUSAL_MAX_PERCENT,
 } from "../constants";
 import type {
   SSClaimingOption,
@@ -14,23 +11,6 @@ import type {
   SSInputs,
   SpousalInputs,
 } from "../types/social-security";
-
-/** Compute Primary Insurance Amount from AIME using bend points */
-export function computePIA(aime: number): number {
-  const [bend1, bend2] = SS_BEND_POINTS;
-  const [rate1, rate2, rate3] = SS_BEND_RATES;
-
-  let pia = 0;
-  if (aime <= bend1) {
-    pia = aime * rate1;
-  } else if (aime <= bend2) {
-    pia = bend1 * rate1 + (aime - bend1) * rate2;
-  } else {
-    pia = bend1 * rate1 + (bend2 - bend1) * rate2 + (aime - bend2) * rate3;
-  }
-
-  return Math.floor(pia * 10) / 10; // SSA rounds down to nearest dime
-}
 
 /** Get Full Retirement Age from birth year */
 export function getFullRetirementAge(birthYear: number): number {
@@ -42,41 +22,40 @@ export function getFullRetirementAge(birthYear: number): number {
   return 67;
 }
 
-/** Compute monthly worker benefit for a given claiming age */
-export function computeWorkerBenefit(
-  pia: number,
+/**
+ * Interpolate monthly benefit for any claiming age (62-70)
+ * using the three SSA statement estimates (at 62, FRA, and 70).
+ * SSA provides estimates for each year 62-70 on the statement,
+ * but this function interpolates smoothly between the anchors.
+ */
+export function interpolateBenefit(
   claimingAge: number,
+  benefitAt62: number,
+  benefitAtFRA: number,
+  benefitAt70: number,
   fra: number,
 ): number {
-  if (claimingAge < 62) return 0;
-  if (claimingAge > 70) return computeWorkerBenefit(pia, 70, fra);
+  if (claimingAge <= 62) return benefitAt62;
+  if (claimingAge >= 70) return benefitAt70;
 
-  if (claimingAge < fra) {
-    // Early reduction
-    const monthsEarly = Math.round((fra - claimingAge) * 12);
-    const first36 = Math.min(monthsEarly, 36);
-    const after36 = Math.max(0, monthsEarly - 36);
-    const reduction =
-      first36 * SS_EARLY_REDUCTION_FIRST_36_PER_MONTH +
-      after36 * SS_EARLY_REDUCTION_AFTER_36_PER_MONTH;
-    return pia * (1 - reduction);
-  } else if (claimingAge > fra) {
-    // Delayed credits
-    const yearsDelayed = claimingAge - fra;
-    const increase = yearsDelayed * SS_DELAYED_CREDIT_PER_YEAR;
-    return pia * (1 + increase);
+  if (claimingAge <= fra) {
+    // Linear interpolation between 62 and FRA
+    const t = (claimingAge - 62) / (fra - 62);
+    return benefitAt62 + t * (benefitAtFRA - benefitAt62);
+  } else {
+    // Linear interpolation between FRA and 70
+    const t = (claimingAge - fra) / (70 - fra);
+    return benefitAtFRA + t * (benefitAt70 - benefitAtFRA);
   }
-
-  return pia;
 }
 
-/** Compute spousal benefit (non-working spouse) */
+/** Compute spousal benefit (non-working spouse gets up to 50% of worker's FRA benefit) */
 export function computeSpousalBenefit(
-  workerPIA: number,
+  workerBenefitAtFRA: number,
   spousalClaimingAge: number,
   spousalFRA: number,
 ): number {
-  const maxSpousal = workerPIA * SS_SPOUSAL_MAX_PERCENT;
+  const maxSpousal = workerBenefitAtFRA * SS_SPOUSAL_MAX_PERCENT;
 
   if (spousalClaimingAge >= spousalFRA) {
     return maxSpousal;
@@ -118,32 +97,31 @@ function breakevenAge(
 ): number | null {
   if (lateMonthly <= earlyMonthly) return null;
 
-  // Cumulative: earlyMonthly * 12 * (age - earlyAge) = lateMonthly * 12 * (age - lateAge)
-  // earlyMonthly * age - earlyMonthly * earlyAge = lateMonthly * age - lateMonthly * lateAge
-  // age * (earlyMonthly - lateMonthly) = earlyMonthly * earlyAge - lateMonthly * lateAge
   const age =
     (earlyMonthly * earlyAge - lateMonthly * lateAge) /
     (earlyMonthly - lateMonthly);
 
+  if (age < lateAge || age > 120) return null;
   return Math.round(age * 10) / 10;
 }
 
-/** Analyze all claiming options for worker and spouse */
+/** Analyze all claiming options using SSA statement estimates */
 export function analyzeClaimingOptions(
   ssInputs: SSInputs,
   spousalInputs?: SpousalInputs,
 ): SSAnalysisResult {
-  const pia = computePIA(ssInputs.aime);
   const fra = getFullRetirementAge(ssInputs.birthYear);
   const lifeExp = ssInputs.lifeExpectancy;
 
+  const benefit62 = ssInputs.monthlyBenefitAt62;
+  const benefitFRA = ssInputs.monthlyBenefitAtFRA;
+  const benefit70 = ssInputs.monthlyBenefitAt70;
+
   // Worker options (62-70)
-  const benefit62 = computeWorkerBenefit(pia, 62, fra);
-  const benefitFRA = computeWorkerBenefit(pia, Math.ceil(fra), fra);
   const workerOptions: SSClaimingOption[] = [];
 
   for (let age = 62; age <= 70; age++) {
-    const monthly = computeWorkerBenefit(pia, age, fra);
+    const monthly = interpolateBenefit(age, benefit62, benefitFRA, benefit70, fra);
     const annual = monthly * 12;
     const total = lifetimeTotal(monthly, age, lifeExp);
     const pctChange = ((monthly - benefitFRA) / benefitFRA) * 100;
@@ -170,11 +148,11 @@ export function analyzeClaimingOptions(
     const spousalLifeExp = spousalInputs.spouseLifeExpectancy ?? lifeExp;
 
     for (let workerAge = 62; workerAge <= 70; workerAge++) {
-      const workerMonthly = computeWorkerBenefit(pia, workerAge, fra);
-      // Spouse can claim spousal benefits when worker claims (simplified)
-      const spousalAge = spousalInputs.spouseBirthYear - ssInputs.birthYear + workerAge;
+      const workerMonthly = interpolateBenefit(workerAge, benefit62, benefitFRA, benefit70, fra);
+      // Spouse can claim when worker claims
+      const spousalAge = workerAge - (ssInputs.birthYear - spousalInputs.spouseBirthYear);
       const spousalMonthly = computeSpousalBenefit(
-        pia,
+        benefitFRA,
         Math.max(62, spousalAge),
         spousalFRA,
       );

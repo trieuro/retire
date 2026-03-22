@@ -22,16 +22,20 @@ import {
 
 interface SSPageInputs {
   birthYear: number;
-  aime: number;
+  monthlyBenefitAt62: number;
+  monthlyBenefitAtFRA: number;
+  monthlyBenefitAt70: number;
   lifeExpectancy: number;
   spouseBirthYear: number;
 }
 
 const defaultInputs: SSPageInputs = {
-  birthYear: 1980,
-  aime: 5000,
+  birthYear: 1964,
+  monthlyBenefitAt62: 2906,
+  monthlyBenefitAtFRA: 4195,
+  monthlyBenefitAt70: 5224,
   lifeExpectancy: DEFAULT_LIFE_EXPECTANCY,
-  spouseBirthYear: 1982,
+  spouseBirthYear: 1966,
 };
 
 const COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#6366f1", "#a855f7", "#ec4899"];
@@ -42,7 +46,13 @@ export default function SocialSecurityPage() {
   const analysis = useMemo(
     () =>
       analyzeClaimingOptions(
-        { birthYear: inputs.birthYear, aime: inputs.aime, lifeExpectancy: inputs.lifeExpectancy },
+        {
+          birthYear: inputs.birthYear,
+          monthlyBenefitAt62: inputs.monthlyBenefitAt62,
+          monthlyBenefitAtFRA: inputs.monthlyBenefitAtFRA,
+          monthlyBenefitAt70: inputs.monthlyBenefitAt70,
+          lifeExpectancy: inputs.lifeExpectancy,
+        },
         { spouseBirthYear: inputs.spouseBirthYear, isWorking: false },
       ),
     [inputs],
@@ -86,8 +96,16 @@ export default function SocialSecurityPage() {
                 <Input type="number" value={inputs.birthYear} onChange={(e) => update("birthYear", +e.target.value)} />
               </div>
               <div>
-                <Label className="text-xs">AIME (Avg Indexed Monthly Earnings)</Label>
-                <Input type="number" value={inputs.aime} onChange={(e) => update("aime", +e.target.value)} />
+                <Label className="text-xs">Monthly Benefit at 62 (from SSA)</Label>
+                <Input type="number" value={inputs.monthlyBenefitAt62} onChange={(e) => update("monthlyBenefitAt62", +e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">Monthly Benefit at FRA (from SSA)</Label>
+                <Input type="number" value={inputs.monthlyBenefitAtFRA} onChange={(e) => update("monthlyBenefitAtFRA", +e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">Monthly Benefit at 70 (from SSA)</Label>
+                <Input type="number" value={inputs.monthlyBenefitAt70} onChange={(e) => update("monthlyBenefitAt70", +e.target.value)} />
               </div>
               <div>
                 <Label className="text-xs">Life Expectancy</Label>
