@@ -291,6 +291,7 @@ export default function CalculatorPage() {
                         <TableHead>FERS</TableHead>
                         <TableHead>Supplement</TableHead>
                         <TableHead>TSP</TableHead>
+                        <TableHead>RMD</TableHead>
                         <TableHead>SS Worker</TableHead>
                         <TableHead>SS Spouse</TableHead>
                         <TableHead>Total</TableHead>
@@ -307,6 +308,7 @@ export default function CalculatorPage() {
                           <TableCell>{formatCurrency(p.fersPension)}</TableCell>
                           <TableCell>{formatCurrency(p.fersSupplementIncome)}</TableCell>
                           <TableCell>{formatCurrency(p.tspWithdrawal)}</TableCell>
+                          <TableCell className="text-orange-600">{p.tspRMD > 0 ? formatCurrency(p.tspRMD) : "—"}</TableCell>
                           <TableCell>{formatCurrency(p.ssWorkerBenefit)}</TableCell>
                           <TableCell>{formatCurrency(p.ssSpousalBenefit)}</TableCell>
                           <TableCell className="font-medium">{formatCurrency(p.totalGrossIncome)}</TableCell>

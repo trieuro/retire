@@ -38,6 +38,7 @@ export interface ProjectionYear {
   fersSupplementIncome: number;
   tspContribution: number;
   tspWithdrawal: number;
+  tspRMD: number;
   tspBalance: number;
   ssWorkerBenefit: number;
   ssSpousalBenefit: number;

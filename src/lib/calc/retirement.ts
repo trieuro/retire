@@ -4,6 +4,7 @@ import { projectTSP, tspWithdrawalAmount } from "./tsp";
 import { getFullRetirementAge, interpolateBenefit, computeSpousalBenefit } from "./social-security";
 import { estimateTotalTax } from "./tax";
 import { inflateAmount } from "./compound";
+import { calculateRMD } from "./rmd";
 import { DEFAULT_CPI_RATE } from "../constants";
 
 /** Generate combined year-by-year retirement projection */
@@ -75,6 +76,7 @@ export function projectRetirement(inputs: RetirementInputs): RetirementResult {
         fersSupplementIncome: 0,
         tspContribution: Math.round(tspContrib),
         tspWithdrawal: 0,
+        tspRMD: 0,
         tspBalance: Math.round(tspBalance),
         ssWorkerBenefit: 0,
         ssSpousalBenefit: 0,
@@ -117,14 +119,22 @@ export function projectRetirement(inputs: RetirementInputs): RetirementResult {
       .filter((o) => age >= o.startAge && age <= o.endAge)
       .reduce((sum, o) => sum + o.annualAmount, 0);
 
-    // TSP withdrawal
+    // TSP withdrawal (with RMD enforcement)
     const yearsRemaining = lifeExpectancy - age;
     const expenseAmount = inflateAmount(expenses.postRetirement, expenses.inflationRate, yearIndex);
     const incomeWithoutTSP = currentPension + supplement + ssWorker + ssSpousal + otherInc;
 
+    // Calculate RMD — minimum you MUST withdraw from traditional TSP/IRA
+    const rmd = calculateRMD(tspBalance, age, ss.birthYear);
+
     let tspWithdrawal = 0;
     if (incomeWithoutTSP < expenseAmount && tspBalance > 0) {
-      tspWithdrawal = Math.min(expenseAmount - incomeWithoutTSP, tspBalance);
+      // Withdraw enough to cover expense gap, but at least the RMD
+      tspWithdrawal = Math.max(expenseAmount - incomeWithoutTSP, rmd);
+      tspWithdrawal = Math.min(tspWithdrawal, tspBalance);
+    } else if (rmd > 0 && tspBalance > 0) {
+      // Even if income covers expenses, must take RMD
+      tspWithdrawal = Math.min(rmd, tspBalance);
     }
 
     // TSP growth on remaining balance
@@ -163,6 +173,7 @@ export function projectRetirement(inputs: RetirementInputs): RetirementResult {
       fersSupplementIncome: Math.round(supplement),
       tspContribution: 0,
       tspWithdrawal: Math.round(tspWithdrawal),
+      tspRMD: Math.round(rmd),
       tspBalance: Math.round(tspBalance),
       ssWorkerBenefit: Math.round(ssWorker),
       ssSpousalBenefit: Math.round(ssSpousal),
