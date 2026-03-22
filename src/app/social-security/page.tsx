@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { analyzeClaimingOptions } from "@/lib/calc/social-security";
 import { formatCurrency } from "@/lib/utils";
-import { useLocalStorage } from "@/lib/hooks/use-local-storage";
+import { useCallback, useRef, useEffect } from "react";
 import { DEFAULT_LIFE_EXPECTANCY } from "@/lib/constants";
 import {
   LineChart,
@@ -41,7 +41,35 @@ const defaultInputs: SSPageInputs = {
 const COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#6366f1", "#a855f7", "#ec4899"];
 
 export default function SocialSecurityPage() {
-  const [inputs, setInputs] = useLocalStorage<SSPageInputs>("ss_inputs", defaultInputs);
+  const [inputs, setInputs] = useState<SSPageInputs>(defaultInputs);
+  const [loaded, setLoaded] = useState(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load from API
+  useEffect(() => {
+    fetch("/api/social-security")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && !data.error) {
+          setInputs((prev) => ({ ...prev, ...data }));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
+
+  // Debounced save
+  useEffect(() => {
+    if (!loaded) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      fetch("/api/social-security", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(inputs),
+      }).catch(() => {});
+    }, 1000);
+  }, [inputs, loaded]);
 
   const analysis = useMemo(
     () =>

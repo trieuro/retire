@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { projectRetirement } from "@/lib/calc/retirement";
 import { formatCurrency, formatPercent } from "@/lib/utils";
-import { useLocalStorage } from "@/lib/hooks/use-local-storage";
+import { useCalculatorDb } from "@/lib/hooks/use-calculator-db";
 import type { RetirementInputs } from "@/lib/types/calculator";
 import { DEFAULT_INFLATION_RATE, DEFAULT_LIFE_EXPECTANCY } from "@/lib/constants";
 import {
@@ -68,23 +68,14 @@ const defaultInputs: RetirementInputs = {
 };
 
 export default function CalculatorPage() {
-  const [inputs, setInputs] = useLocalStorage<RetirementInputs>("calculator_inputs", defaultInputs);
+  const { inputs, update, loading } = useCalculatorDb(defaultInputs);
   const [showTable, setShowTable] = useState(false);
 
   const result = useMemo(() => projectRetirement(inputs), [inputs]);
 
-  const update = (path: string, value: number | string) => {
-    setInputs((prev) => {
-      const next = JSON.parse(JSON.stringify(prev)) as RetirementInputs;
-      const keys = path.split(".");
-      let obj: Record<string, unknown> = next as unknown as Record<string, unknown>;
-      for (let i = 0; i < keys.length - 1; i++) {
-        obj = obj[keys[i]] as Record<string, unknown>;
-      }
-      obj[keys[keys.length - 1]] = value;
-      return next;
-    });
-  };
+  if (loading) {
+    return <div className="flex items-center justify-center h-64"><div className="text-muted-foreground">Loading...</div></div>;
+  }
 
   const retiredProjections = result.projections.filter((p) => p.isRetired);
 

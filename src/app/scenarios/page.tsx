@@ -8,11 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { compareScenarios } from "@/lib/calc/scenarios";
 import { formatCurrency } from "@/lib/utils";
-import { useLocalStorage } from "@/lib/hooks/use-local-storage";
+import { useScenariosDb } from "@/lib/hooks/use-scenarios-db";
 import type { Scenario } from "@/lib/types/scenario";
 import type { RetirementInputs } from "@/lib/types/calculator";
 import { DEFAULT_INFLATION_RATE, DEFAULT_LIFE_EXPECTANCY } from "@/lib/constants";
-import { generateId } from "@/lib/utils";
+// generateId no longer needed - DB generates IDs
 import {
   LineChart,
   Line,
@@ -54,31 +54,28 @@ const baseInputs: RetirementInputs = {
 };
 
 export default function ScenariosPage() {
-  const [scenarios, setScenarios] = useLocalStorage<Scenario[]>("scenarios", []);
+  const { scenarios, loading, addScenario: addToDb, removeScenario: removeFromDb, clearAll } = useScenariosDb();
 
-  const addScenario = (name: string, retirementAge: number, ssAge: number) => {
-    const now = new Date().toISOString();
+  const addScenario = async (name: string, retirementAge: number, ssAge: number) => {
     const inputs = JSON.parse(JSON.stringify(baseInputs)) as RetirementInputs;
     inputs.fers.retirementAge = retirementAge;
     inputs.fers.yearsOfService = retirementAge - inputs.fers.currentAge + (baseInputs.fers.yearsOfService - (baseInputs.fers.retirementAge - baseInputs.fers.currentAge));
     inputs.ssClaimingAge = ssAge;
 
-    setScenarios((prev) => [
-      ...prev,
-      {
-        id: generateId(),
-        name,
-        color: COLORS[prev.length % COLORS.length],
-        inputs,
-        createdAt: now,
-        updatedAt: now,
-      },
-    ]);
+    await addToDb({
+      name,
+      color: COLORS[scenarios.length % COLORS.length],
+      inputs,
+    });
   };
 
-  const removeScenario = (id: string) => {
-    setScenarios((prev) => prev.filter((s) => s.id !== id));
+  const removeScenario = async (id: string) => {
+    await removeFromDb(id);
   };
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64"><div className="text-muted-foreground">Loading...</div></div>;
+  }
 
   const computed = useMemo(() => compareScenarios(scenarios), [scenarios]);
 
@@ -132,7 +129,7 @@ export default function ScenariosPage() {
             </Button>
           </div>
           {hasScenarios && (
-            <Button variant="ghost" size="sm" className="mt-2 text-red-500" onClick={() => setScenarios([])}>
+            <Button variant="ghost" size="sm" className="mt-2 text-red-500" onClick={() => clearAll()}>
               Clear All
             </Button>
           )}
