@@ -2,7 +2,7 @@ import type { RetirementInputs, ProjectionYear, RetirementResult } from "../type
 import { computeFERSAnnuity, applySurvivorReduction, computeFERSSupplement, applyFERSCOLA } from "./fers-pension";
 import { projectTSP, tspWithdrawalAmount } from "./tsp";
 import { getFullRetirementAge, interpolateBenefit, computeSpousalBenefit } from "./social-security";
-import { estimateFederalTax, computeSSTaxableAmount } from "./tax";
+import { estimateTotalTax } from "./tax";
 import { inflateAmount } from "./compound";
 import { DEFAULT_CPI_RATE } from "../constants";
 
@@ -80,7 +80,11 @@ export function projectRetirement(inputs: RetirementInputs): RetirementResult {
         ssSpousalBenefit: 0,
         otherIncome: 0,
         totalGrossIncome: Math.round(tsp.annualSalary),
-        estimatedTaxes: Math.round(estimateFederalTax(tsp.annualSalary, tax.filingStatus)),
+        estimatedTaxes: Math.round(estimateTotalTax({
+          pensionIncome: 0, tspWithdrawal: 0, ssIncome: 0,
+          otherIncome: tsp.annualSalary, filingStatus: tax.filingStatus,
+          age, state: tax.stateOfResidence,
+        }).total),
         totalNetIncome: 0,
         expenses: Math.round(expenseAmount),
         surplus: 0,
@@ -133,11 +137,17 @@ export function projectRetirement(inputs: RetirementInputs): RetirementResult {
       shortfallAge = age;
     }
 
-    // Taxes
-    const nonSSIncome = currentPension + supplement + tspWithdrawal + otherInc;
-    const ssTaxable = computeSSTaxableAmount(ssWorker + ssSpousal, nonSSIncome);
-    const taxableIncome = nonSSIncome + ssTaxable;
-    const taxes = estimateFederalTax(taxableIncome, tax.filingStatus);
+    // Taxes (federal + Delaware state)
+    const taxResult = estimateTotalTax({
+      pensionIncome: currentPension + supplement,
+      tspWithdrawal,
+      ssIncome: ssWorker + ssSpousal,
+      otherIncome: otherInc,
+      filingStatus: tax.filingStatus,
+      age,
+      state: tax.stateOfResidence,
+    });
+    const taxes = taxResult.total;
 
     const totalGross = currentPension + supplement + tspWithdrawal + ssWorker + ssSpousal + otherInc;
     const totalNet = totalGross - taxes;
