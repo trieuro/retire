@@ -7,11 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { computeNetWorth } from "@/lib/calc/net-worth";
-import { formatCurrency, generateId } from "@/lib/utils";
-import { useLocalStorage } from "@/lib/hooks/use-local-storage";
-import type { Account } from "@/lib/types/net-worth";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
-import { Plus, Trash2 } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
+import { useAccounts } from "@/lib/hooks/use-accounts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { Plus, Trash2, Loader2 } from "lucide-react";
 
 const COLORS = ["#2563eb", "#16a34a", "#ca8a04", "#dc2626", "#8b5cf6", "#06b6d4", "#f97316", "#ec4899"];
 
@@ -33,44 +32,54 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default function NetWorthPage() {
-  const [accounts, setAccounts] = useLocalStorage<Account[]>("net_worth_accounts", []);
+  const { accounts, loading, error, addAccount: addAccountToDb, updateBalance: updateBalanceInDb, removeAccount: removeAccountFromDb } = useAccounts();
   const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newCategory, setNewCategory] = useState("cash");
   const [newBalance, setNewBalance] = useState(0);
+  const [saving, setSaving] = useState(false);
 
   const { totalAssets, totalLiabilities, netWorth } = computeNetWorth(accounts);
 
-  const addAccount = () => {
+  const addAccount = async () => {
     if (!newName.trim()) return;
     const isLiability = ["mortgage", "student_loan", "auto_loan", "credit_card", "other_liability"].includes(newCategory);
-    const now = new Date().toISOString();
-    setAccounts((prev) => [
-      ...prev,
-      {
-        id: generateId(),
-        name: newName.trim(),
-        category: newCategory as Account["category"],
-        type: isLiability ? "liability" : "asset",
-        balance: Math.abs(newBalance),
-        createdAt: now,
-        updatedAt: now,
-      },
-    ]);
+    setSaving(true);
+    await addAccountToDb({
+      name: newName.trim(),
+      category: newCategory,
+      type: isLiability ? "liability" : "asset",
+      balance: Math.abs(newBalance),
+    });
     setNewName("");
     setNewBalance(0);
     setShowForm(false);
+    setSaving(false);
   };
 
-  const removeAccount = (id: string) => {
-    setAccounts((prev) => prev.filter((a) => a.id !== id));
+  const removeAccount = async (id: string) => {
+    await removeAccountFromDb(id);
   };
 
-  const updateBalance = (id: string, balance: number) => {
-    setAccounts((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, balance: Math.abs(balance), updatedAt: new Date().toISOString() } : a)),
+  const updateBalance = async (id: string, balance: number) => {
+    await updateBalanceInDb(id, balance);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
     );
-  };
+  }
+
+  if (error) {
+    return (
+      <div className="text-center text-red-600 py-8">
+        <p>Error loading accounts: {error}</p>
+      </div>
+    );
+  }
 
   const assets = accounts.filter((a) => a.type === "asset");
   const liabilities = accounts.filter((a) => a.type === "liability");
