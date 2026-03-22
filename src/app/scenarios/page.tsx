@@ -73,10 +73,6 @@ export default function ScenariosPage() {
     await removeFromDb(id);
   };
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="text-muted-foreground">Loading...</div></div>;
-  }
-
   const computed = useMemo(() => compareScenarios(scenarios), [scenarios]);
 
   // Build comparison chart data (TSP balance over time)
@@ -97,6 +93,10 @@ export default function ScenariosPage() {
   }, [computed]);
 
   const hasScenarios = scenarios.length > 0;
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64"><div className="text-muted-foreground">Loading...</div></div>;
+  }
 
   return (
     <div>
