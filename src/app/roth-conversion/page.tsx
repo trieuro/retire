@@ -26,7 +26,7 @@ export default function RothConversionPage() {
     currentAge: 61,
     birthYear: 1964,
     retirementAge: 62,
-    traditionalBalance: 300000,
+    traditionalBalance: 916950,
     rothBalance: 0,
     annualPension: 35000,
     annualSSBenefit: 50340,
