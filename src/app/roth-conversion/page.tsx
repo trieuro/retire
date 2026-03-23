@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@
 import { planRothConversions } from "@/lib/calc/roth-conversion";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import { DEFAULT_LIFE_EXPECTANCY } from "@/lib/constants";
+import { useRothConversionDb } from "@/lib/hooks/use-roth-conversion-db";
 import {
   BarChart,
   Bar,
@@ -21,27 +22,38 @@ import {
   Legend,
 } from "recharts";
 
+const defaultInputs = {
+  currentAge: 61,
+  birthYear: 1964,
+  retirementAge: 65,
+  traditionalBalance: 1271914,
+  rothBalance: 0,
+  annualPension: 35000,
+  annualSSBenefit: 50340,
+  ssStartAge: 67,
+  spousalSSBenefit: 25170,
+  spousalSSStartAge: 67,
+  otherAnnualIncome: 0,
+  expectedReturnRate: 0.06,
+  phase1BracketIndex: 2,  // 22% bracket (aggressive, pre-SS)
+  phase2BracketIndex: 1,  // 12% bracket (conservative, post-SS)
+  annualExpenses: 65000,
+  inflationRate: 0.03,
+  lifeExpectancy: DEFAULT_LIFE_EXPECTANCY,
+};
+
 export default function RothConversionPage() {
-  const [inputs, setInputs] = useState({
-    currentAge: 61,
-    birthYear: 1964,
-    retirementAge: 62,
-    traditionalBalance: 916950,
-    rothBalance: 0,
-    annualPension: 35000,
-    annualSSBenefit: 50340,
-    ssStartAge: 67,
-    otherAnnualIncome: 0,
-    expectedReturnRate: 0.06,
-    targetBracketIndex: 1,
-    lifeExpectancy: DEFAULT_LIFE_EXPECTANCY,
-  });
+  const { inputs, update, loading } = useRothConversionDb(defaultInputs);
 
-  const plan = useMemo(() => planRothConversions(inputs), [inputs]);
+  const plan = useMemo(() => planRothConversions({
+    ...inputs,
+    filingStatus: "married_joint",
+    state: "MD",
+  }), [inputs]);
 
-  const update = (key: string, value: number) => {
-    setInputs((prev) => ({ ...prev, [key]: value }));
-  };
+  if (loading) {
+    return <div className="flex items-center justify-center h-64"><div className="text-muted-foreground">Loading...</div></div>;
+  }
 
   const bracketOptions = [
     { index: 0, label: "10% bracket (conservative)" },
@@ -108,25 +120,62 @@ export default function RothConversionPage() {
                 <Input type="number" value={inputs.annualPension} onChange={(e) => update("annualPension", +e.target.value)} />
               </div>
               <div>
-                <Label className="text-xs">Annual SS Benefit</Label>
+                <Label className="text-xs">Your SS Benefit (annual)</Label>
                 <Input type="number" value={inputs.annualSSBenefit} onChange={(e) => update("annualSSBenefit", +e.target.value)} />
               </div>
               <div>
                 <Label className="text-xs">SS Start Age</Label>
                 <Input type="number" value={inputs.ssStartAge} onChange={(e) => update("ssStartAge", +e.target.value)} />
               </div>
+              <div>
+                <Label className="text-xs">Spousal SS Benefit (annual)</Label>
+                <Input type="number" value={inputs.spousalSSBenefit} onChange={(e) => update("spousalSSBenefit", +e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">Spousal SS Start Age</Label>
+                <Input type="number" value={inputs.spousalSSStartAge} onChange={(e) => update("spousalSSStartAge", +e.target.value)} />
+              </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader><CardTitle className="text-base">Conversion Strategy</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Expenses</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <Label className="text-xs">Fill up to bracket</Label>
+                <Label className="text-xs">Annual Expenses (post-retirement)</Label>
+                <Input type="number" value={inputs.annualExpenses} onChange={(e) => update("annualExpenses", +e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">Inflation Rate</Label>
+                <Input type="number" step="0.01" value={inputs.inflationRate} onChange={(e) => update("inflationRate", +e.target.value)} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                If expenses exceed income, the gap is withdrawn from traditional TSP (taxable), reducing room for conversions.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-base">Two-Phase Strategy</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <Label className="text-xs">Phase 1: Pre-SS (aggressive)</Label>
                 <select
                   className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-                  value={inputs.targetBracketIndex}
-                  onChange={(e) => update("targetBracketIndex", +e.target.value)}
+                  value={inputs.phase1BracketIndex}
+                  onChange={(e) => update("phase1BracketIndex", +e.target.value)}
+                >
+                  {bracketOptions.map((opt) => (
+                    <option key={opt.index} value={opt.index}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs">Phase 2: Post-SS (conservative)</Label>
+                <select
+                  className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                  value={inputs.phase2BracketIndex}
+                  onChange={(e) => update("phase2BracketIndex", +e.target.value)}
                 >
                   {bracketOptions.map((opt) => (
                     <option key={opt.index} value={opt.index}>{opt.label}</option>
@@ -134,7 +183,7 @@ export default function RothConversionPage() {
                 </select>
               </div>
               <p className="text-xs text-muted-foreground">
-                Each year, convert enough to fill up the target tax bracket. Higher bracket = more conversion but more tax now.
+                Phase 1 converts aggressively while income is low (before SS). Phase 2 scales back after SS starts.
               </p>
             </CardContent>
           </Card>
@@ -226,50 +275,63 @@ export default function RothConversionPage() {
             </Card>
           )}
 
-          {/* Year-by-Year Table */}
-          <Card>
-            <CardHeader><CardTitle className="text-base">Conversion Schedule</CardTitle></CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto text-xs">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Age</TableHead>
-                      <TableHead>Other Income</TableHead>
-                      <TableHead>Convert</TableHead>
-                      <TableHead>Tax</TableHead>
-                      <TableHead>Rate</TableHead>
-                      <TableHead>Traditional</TableHead>
-                      <TableHead>Roth</TableHead>
-                      <TableHead>RMD Savings</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {plan.years.map((y) => (
-                      <TableRow key={y.age}>
-                        <TableCell className="font-medium">{y.age}</TableCell>
-                        <TableCell>{formatCurrency(y.otherIncome)}</TableCell>
-                        <TableCell className="text-blue-600 font-medium">
-                          {y.conversionAmount > 0 ? formatCurrency(y.conversionAmount) : "—"}
-                        </TableCell>
-                        <TableCell className="text-red-600">
-                          {y.taxOnConversion > 0 ? formatCurrency(y.taxOnConversion) : "—"}
-                        </TableCell>
-                        <TableCell>{y.effectiveTaxRate > 0 ? `${y.effectiveTaxRate}%` : "—"}</TableCell>
-                        <TableCell>{formatCurrency(y.traditionalBalance)}</TableCell>
-                        <TableCell className="text-green-600">{formatCurrency(y.rothBalance)}</TableCell>
-                        <TableCell className="text-green-600">
-                          {y.rmdSavings > 0 ? formatCurrency(y.rmdSavings) : "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
+
+      {/* Year-by-Year Table — full width */}
+      <Card className="mt-6">
+        <CardHeader><CardTitle className="text-base">Conversion Schedule</CardTitle></CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto text-xs">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Age</TableHead>
+                  <TableHead>Phase</TableHead>
+                  <TableHead>Income</TableHead>
+                  <TableHead>Expenses</TableHead>
+                  <TableHead>Gap</TableHead>
+                  <TableHead>Convert</TableHead>
+                  <TableHead>Tax</TableHead>
+                  <TableHead>Rate</TableHead>
+                  <TableHead>Traditional</TableHead>
+                  <TableHead>Roth</TableHead>
+                  <TableHead>RMD Savings</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {plan.years.map((y) => (
+                  <TableRow key={y.age}>
+                    <TableCell className="font-medium">{y.age}</TableCell>
+                    <TableCell>
+                      <span className={y.phase === 1 ? "text-orange-600 font-medium" : "text-blue-600"}>
+                        {y.phase === 1 ? `P1 ${y.targetBracket}` : `P2 ${y.targetBracket}`}
+                      </span>
+                    </TableCell>
+                    <TableCell>{formatCurrency(y.otherIncome)}</TableCell>
+                    <TableCell>{formatCurrency(y.expenses)}</TableCell>
+                    <TableCell className={y.expenseGap > 0 ? "text-red-600 font-medium" : ""}>
+                      {y.expenseGap > 0 ? formatCurrency(y.expenseGap) : "—"}
+                    </TableCell>
+                    <TableCell className="text-blue-600 font-medium">
+                      {y.conversionAmount > 0 ? formatCurrency(y.conversionAmount) : "—"}
+                    </TableCell>
+                    <TableCell className="text-red-600">
+                      {y.taxOnConversion > 0 ? formatCurrency(y.taxOnConversion) : "—"}
+                    </TableCell>
+                    <TableCell>{y.effectiveTaxRate > 0 ? `${y.effectiveTaxRate}%` : "—"}</TableCell>
+                    <TableCell>{formatCurrency(y.traditionalBalance)}</TableCell>
+                    <TableCell className="text-green-600">{formatCurrency(y.rothBalance)}</TableCell>
+                    <TableCell className="text-green-600">
+                      {y.rmdSavings > 0 ? formatCurrency(y.rmdSavings) : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

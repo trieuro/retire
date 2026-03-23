@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Calculator, Wallet, GitCompare, Shield, ArrowRightLeft } from "lucide-react";
+import { LayoutDashboard, Calculator, Wallet, GitCompare, Shield, ArrowRightLeft, Receipt } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/calculator", label: "FERS Calculator", icon: Calculator },
   { href: "/social-security", label: "Social Security", icon: Shield },
+  { href: "/expenses", label: "Expenses", icon: Receipt },
   { href: "/roth-conversion", label: "Roth Conversion", icon: ArrowRightLeft },
   { href: "/net-worth", label: "Net Worth", icon: Wallet },
   { href: "/scenarios", label: "Scenarios", icon: GitCompare },

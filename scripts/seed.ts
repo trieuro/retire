@@ -26,22 +26,27 @@ async function seed() {
   }
 
   // Seed calculator inputs (Roy's actual data)
+  // GRB Reference (as of 2026): Retirement SCD 12/07/2009, Estimated High-3 $178,605.13
+  //   Unreduced Annuity (age 62, 12/28/2026): $2,641.87/mo no survivor, $2,377.68/mo max survivor
+  //   MRA+10 Reduced (currently eligible): $2,435.35/mo no survivor, $2,191.82/mo max survivor
+  //   Early/Discontinued (12/06/2029, age 64y11m): $3,383.57/mo no survivor, $3,045.22/mo max survivor
+  //   GRB implies ~17.75 YOS at retirement (17y SCD + ~9mo sick leave credit)
   const calcInputs = {
     fers: {
       currentAge: 61,
-      retirementAge: 62,
+      retirementAge: 65,
       yearsOfService: 20,
-      high3Salary: 176100,
+      high3Salary: 178605,
       survivorAnnuityElection: "full",
       fersSupplementEligible: true,
     },
     tsp: {
-      currentBalance: 300000,
-      annualSalary: 176100,
-      employeeContribRate: 0.05,
+      currentBalance: 1271914,
+      annualSalary: 178605,
+      employeeContribRate: 0.14,
       agencyMatchRate: 0.05,
       expectedReturnRate: 0.07,
-      rothPercentage: 0,
+      rothPercentage: 1,
       catchUpEligible: true,
     },
     ss: {
@@ -64,7 +69,7 @@ async function seed() {
     },
     tax: {
       filingStatus: "married_joint",
-      stateOfResidence: "DE",
+      stateOfResidence: "MD",
     },
   };
 

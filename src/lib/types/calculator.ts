@@ -8,10 +8,18 @@ export interface OtherIncomeSource {
   endAge: number;
 }
 
+export interface ExpenseItem {
+  name: string;
+  amount: number;
+  category: "essential" | "non-essential";
+}
+
 export interface ExpenseInputs {
   preRetirement: number;
   postRetirement: number;
   inflationRate: number;
+  preRetirementItems?: ExpenseItem[];
+  postRetirementItems?: ExpenseItem[];
 }
 
 export interface TaxInputs {

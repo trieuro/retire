@@ -16,7 +16,7 @@ async function update() {
   const tsp = inputs.tsp as Record<string, unknown>;
   const fers = inputs.fers as Record<string, unknown>;
 
-  tsp.currentBalance = 916950;
+  tsp.currentBalance = 1271914;
   tsp.annualSalary = 176100;
   tsp.catchUpEligible = true;
   fers.currentAge = 61;

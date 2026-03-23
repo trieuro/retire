@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsx:*)",
+      "Bash(npx next:*)",
+      "WebSearch",
+      "WebFetch(domain:www.tsp.gov)",
+      "WebFetch(domain:www.myfederalretirement.com)",
+      "Bash(node -e \":*)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(cd:*)",
+      "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
+      "Bash(npx tsc:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

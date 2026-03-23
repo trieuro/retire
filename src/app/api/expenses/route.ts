@@ -4,27 +4,29 @@ import { calculatorProfiles } from "@/lib/db/schema";
 import { getDefaultUser } from "@/lib/db/default-user";
 import { eq, and } from "drizzle-orm";
 
-/** GET /api/calculator - get saved calculator inputs */
+const PROFILE_NAME = "Expenses";
+
+/** GET /api/expenses - get saved expense breakdown */
 export async function GET() {
   try {
     const userId = await getDefaultUser();
     const rows = await db.select().from(calculatorProfiles)
-      .where(and(eq(calculatorProfiles.userId, userId), eq(calculatorProfiles.name, "Default")));
+      .where(and(eq(calculatorProfiles.userId, userId), eq(calculatorProfiles.name, PROFILE_NAME)));
     if (rows.length === 0) return NextResponse.json(null);
     return NextResponse.json(rows[0].inputs);
   } catch (error) {
-    console.error("GET /api/calculator error:", error);
+    console.error("GET /api/expenses error:", error);
     return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
   }
 }
 
-/** PUT /api/calculator - save calculator inputs */
+/** PUT /api/expenses - save expense breakdown */
 export async function PUT(request: Request) {
   try {
     const userId = await getDefaultUser();
     const inputs = await request.json();
     const existing = await db.select().from(calculatorProfiles)
-      .where(and(eq(calculatorProfiles.userId, userId), eq(calculatorProfiles.name, "Default")));
+      .where(and(eq(calculatorProfiles.userId, userId), eq(calculatorProfiles.name, PROFILE_NAME)));
 
     if (existing.length > 0) {
       await db.update(calculatorProfiles)
@@ -33,13 +35,13 @@ export async function PUT(request: Request) {
     } else {
       await db.insert(calculatorProfiles).values({
         userId,
-        name: "Default",
+        name: PROFILE_NAME,
         inputs,
       });
     }
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("PUT /api/calculator error:", error);
+    console.error("PUT /api/expenses error:", error);
     return NextResponse.json({ error: "Failed to save" }, { status: 500 });
   }
 }

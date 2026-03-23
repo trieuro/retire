@@ -4,19 +4,25 @@
  * Goal: Convert traditional TSP/IRA to Roth during low-income years
  * (between retirement and RMD start) to reduce future RMD tax burden.
  *
- * Strategy: "Fill up" low tax brackets each year with conversions.
+ * Two-phase strategy:
+ *   Phase 1 (pre-SS): Aggressively fill a higher bracket while income is low
+ *   Phase 2 (post-SS): Scale back to a lower bracket once SS income starts
  */
 
 import { TAX_BRACKETS_MFJ, TAX_STANDARD_DEDUCTION_MFJ } from "../constants";
-import { estimateFederalTax } from "./tax";
+import { estimateTotalTax } from "./tax";
 import { calculateRMD, getRMDStartAge } from "./rmd";
 
 export interface RothConversionYear {
   age: number;
   year: number;
+  phase: 1 | 2;
   traditionalBalance: number;
   rothBalance: number;
   otherIncome: number;
+  expenses: number;
+  expenseGap: number;
+  tspWithdrawalForExpenses: number;
   conversionAmount: number;
   taxOnConversion: number;
   effectiveTaxRate: number;
@@ -49,10 +55,10 @@ function getBracketLabel(bracketIndex: number): string {
 }
 
 /**
- * Plan Roth conversions to fill up to a target tax bracket.
+ * Plan Roth conversions with a two-phase bracket strategy.
  *
- * @param targetBracketIndex - Fill up to this bracket (0=10%, 1=12%, 2=22%, etc.)
- *   Recommended: 1 (12% bracket) for most retirees, 2 (22%) if aggressive
+ * Phase 1 (retirement to SS start): Fill up to phase1BracketIndex (aggressive)
+ * Phase 2 (SS start to RMD):        Fill up to phase2BracketIndex (conservative)
  */
 export function planRothConversions(params: {
   currentAge: number;
@@ -63,19 +69,31 @@ export function planRothConversions(params: {
   annualPension: number;
   annualSSBenefit: number;
   ssStartAge: number;
+  spousalSSBenefit: number;
+  spousalSSStartAge: number;
   otherAnnualIncome: number;
   expectedReturnRate: number;
-  targetBracketIndex: number;
+  /** Bracket target for Phase 1 (pre-SS, aggressive) */
+  phase1BracketIndex: number;
+  /** Bracket target for Phase 2 (post-SS, conservative) */
+  phase2BracketIndex: number;
+  annualExpenses: number;
+  inflationRate: number;
   lifeExpectancy: number;
+  filingStatus?: "married_joint" | "single";
+  state?: string;
 }): RothConversionPlan {
   const {
     currentAge, birthYear, retirementAge, expectedReturnRate,
-    targetBracketIndex, lifeExpectancy,
+    phase1BracketIndex, phase2BracketIndex, lifeExpectancy,
+    annualExpenses, inflationRate,
+    filingStatus = "married_joint",
+    state = "MD",
   } = params;
 
   const rmdStartAge = getRMDStartAge(birthYear);
   const conversionStartAge = Math.max(currentAge, retirementAge);
-  const conversionEndAge = rmdStartAge - 1; // Stop converting before RMDs start
+  const conversionEndAge = rmdStartAge - 1;
   const currentYear = new Date().getFullYear();
 
   let traditionalBal = params.traditionalBalance;
@@ -84,55 +102,99 @@ export function planRothConversions(params: {
   let totalConverted = 0;
   let totalTaxPaid = 0;
 
-  // Track what balance would be WITHOUT conversions for comparison
   let traditionalBalNoConversion = params.traditionalBalance;
 
   for (let age = conversionStartAge; age <= Math.min(conversionEndAge, lifeExpectancy); age++) {
     const yearIndex = age - currentAge;
     const year = currentYear + yearIndex;
 
-    // Other income this year
-    let otherIncome = params.annualPension;
-    if (age >= params.ssStartAge) {
-      otherIncome += params.annualSSBenefit;
-    }
-    otherIncome += params.otherAnnualIncome;
+    // Determine phase: before SS = phase 1 (aggressive), after = phase 2
+    const ssStarted = age >= params.ssStartAge;
+    const phase: 1 | 2 = ssStarted ? 2 : 1;
+    const targetBracketIndex = ssStarted ? phase2BracketIndex : phase1BracketIndex;
 
-    // How much room in the target bracket?
+    // Income this year (pension + SS + spousal SS + other)
+    let otherIncome = params.annualPension;
+    const ssIncome = ssStarted ? params.annualSSBenefit : 0;
+    const spousalSS = age >= params.spousalSSStartAge ? params.spousalSSBenefit : 0;
+    otherIncome += ssIncome + spousalSS + params.otherAnnualIncome;
+
+    // Expenses this year (inflation-adjusted from retirement start)
+    const yearsFromRetirement = age - retirementAge;
+    const expenses = Math.round(annualExpenses * Math.pow(1 + inflationRate, yearsFromRetirement));
+
+    // Expense gap: if income doesn't cover expenses, must withdraw from TSP
+    // Tax on base income (without any withdrawal or conversion)
+    const totalSSIncome = ssIncome + spousalSS;
+    const baseTax = estimateTotalTax({
+      pensionIncome: params.annualPension,
+      tspWithdrawal: 0,
+      ssIncome: totalSSIncome,
+      otherIncome: params.otherAnnualIncome,
+      filingStatus,
+      age,
+      state,
+    }).total;
+    const netIncome = otherIncome - baseTax;
+    const expenseGap = Math.max(0, expenses - netIncome);
+
+    // If there's a gap, withdraw from traditional TSP (taxable withdrawal)
+    const tspWithdrawalForExpenses = Math.min(expenseGap, traditionalBal);
+    traditionalBal -= tspWithdrawalForExpenses;
+    traditionalBalNoConversion -= Math.min(expenseGap, traditionalBalNoConversion);
+
+    // Room in the target bracket, accounting for the expense withdrawal as taxable income
     const bracketTop = getBracketTop(targetBracketIndex);
-    const taxableIncomeBeforeConversion = Math.max(0, otherIncome - TAX_STANDARD_DEDUCTION_MFJ);
+    const totalGrossBeforeConversion = otherIncome + tspWithdrawalForExpenses;
+    const taxableIncomeBeforeConversion = Math.max(0, totalGrossBeforeConversion - TAX_STANDARD_DEDUCTION_MFJ);
     const roomInBracket = Math.max(0, bracketTop - taxableIncomeBeforeConversion);
 
-    // Convert up to the room available (don't exceed traditional balance)
     const conversionAmount = Math.min(roomInBracket, traditionalBal);
 
-    // Tax on this conversion
-    const taxWithout = estimateFederalTax(otherIncome, "married_joint");
-    const taxWith = estimateFederalTax(otherIncome + conversionAmount, "married_joint");
+    // Tax on conversion (incremental: tax with conversion - tax without)
+    const taxWithout = estimateTotalTax({
+      pensionIncome: params.annualPension,
+      tspWithdrawal: tspWithdrawalForExpenses,
+      ssIncome: totalSSIncome,
+      otherIncome: params.otherAnnualIncome,
+      filingStatus,
+      age,
+      state,
+    }).total;
+    const taxWith = estimateTotalTax({
+      pensionIncome: params.annualPension,
+      tspWithdrawal: tspWithdrawalForExpenses + conversionAmount,
+      ssIncome: totalSSIncome,
+      otherIncome: params.otherAnnualIncome,
+      filingStatus,
+      age,
+      state,
+    }).total;
     const taxOnConversion = taxWith - taxWithout;
     const effectiveRate = conversionAmount > 0 ? taxOnConversion / conversionAmount : 0;
 
-    // Move money: traditional → Roth
     traditionalBal -= conversionAmount;
     rothBal += conversionAmount;
     totalConverted += conversionAmount;
     totalTaxPaid += taxOnConversion;
 
-    // Growth on remaining balances
     traditionalBal *= (1 + expectedReturnRate);
     rothBal *= (1 + expectedReturnRate);
     traditionalBalNoConversion *= (1 + expectedReturnRate);
 
-    // Projected RMDs at RMD start age (comparing with and without conversion)
     const projectedRMDWithout = calculateRMD(traditionalBalNoConversion, rmdStartAge, birthYear);
     const projectedRMDWith = calculateRMD(traditionalBal, rmdStartAge, birthYear);
 
     years.push({
       age,
       year,
+      phase,
       traditionalBalance: Math.round(traditionalBal),
       rothBalance: Math.round(rothBal),
       otherIncome: Math.round(otherIncome),
+      expenses: Math.round(expenses),
+      expenseGap: Math.round(expenseGap),
+      tspWithdrawalForExpenses: Math.round(tspWithdrawalForExpenses),
       conversionAmount: Math.round(conversionAmount),
       taxOnConversion: Math.round(taxOnConversion),
       effectiveTaxRate: Math.round(effectiveRate * 1000) / 10,
